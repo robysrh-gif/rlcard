@@ -1,0 +1,798 @@
+{% extends 'crawler/base.html' %}
+{% load static %}
+{% load crawlerapp_filter %}
+
+{% block title %} Showing results {% endblock %}
+
+{% block custom_style %}
+<style>
+
+{% for item in list1 %}
+#chartjs-tooltip_{{ forloop.counter }} {
+			opacity: 1;
+			position: absolute;
+			background: rgba(224, 224, 224, .9);
+			color: black;
+			border-radius: 10px;
+			-webkit-transition: all .1s ease;
+			transition: all .1s ease;
+			-webkit-transform: translate(-50%, 0);
+			transform: translate(-50%, 0);
+			box-shadow: 0 19px 38px rgba(0,0,0,0.30), 0 15px 12px rgba(0,0,0,0.22);
+		}
+		{% endfor %}
+
+{% for item in list2 %}
+#chartjs-tooltip_{{ forloop.counter|add:'2' }} {
+			opacity: 1;
+			position: absolute;
+			background: rgba(224, 224, 224, .9);
+			color: black;
+			border-radius: 10px;
+			-webkit-transition: all .1s ease;
+			transition: all .1s ease;
+			-webkit-transform: translate(-50%, 0);
+			transform: translate(-50%, 0);
+			box-shadow: 0 19px 38px rgba(0,0,0,0.30), 0 15px 12px rgba(0,0,0,0.22);
+		}
+		{% endfor %}
+
+		.chartjs-tooltip-key {
+			display: inline-block;
+			width: 10px;
+			height: 10px;
+			margin-right: 10px;
+		}
+
+		.blur {
+        filter: blur(5px);
+        transition: 1s;
+      }
+      .blur:hover {
+        filter: blur(0px);
+      }
+ </style>
+
+  {% endblock %}
+
+{% block body %}
+
+<ul class="breadcrumb">
+<li class="breadcrumb-item section-title"><a href="{% url 'crawler:index' %}">FALCON</a></li>
+<li class="breadcrumb-item section-title active">RESULT</li>
+</ul>
+
+
+<div class="container">
+
+  <ul class="nav nav-tabs">
+
+    {% for query in list1 %}
+  <li class="nav-item mr-1"><a href="#tab_{{ forloop.counter }}" class="nav-link section-title font-weight-bold {% if forloop.counter == 1 %}active{% endif %}" data-toggle="tab" data-keyword="{{ query }}">{{ query|upper }}</a></li>
+    {% endfor %}
+
+    {% if list2 %}
+  <li class="nav-item mr-1 dropdown">
+    <a href="#" class="nav-link dropdown-toggle" data-toggle="dropdown">
+      More
+    </a>
+    <div class="dropdown-menu">
+      {% for query in list2 %}
+      <a href="#dropdown_{{ forloop.counter }}" class="dropdown-item section-title font-weight-bold" data-toggle="tab">{{ query }}</a>
+      {% endfor %}
+    </div>
+  </li>
+    {% endif %}
+</ul>
+
+<div class="tab-content pt-3">
+  {% for query in list1 %}
+  <div class="tab-pane fade show {% if forloop.counter == 1 %}active{% endif %}" id="tab_{{ forloop.counter }}">
+    <div class="row">
+        <div class="row">
+          <button class="btn btn-dark btn-sm mr-4" id="generate_report">Generate Report</button>
+          <button class="btn btn-dark btn-sm mr-4" >Keyword Analysis</button>
+          <button class="btn btn-dark btn-sm mr-4 "  data-toggle="modal" data-target="#modal_keyword_{{ forloop.counter }}">{{ query }}'s Trends</button>
+          <input type="hidden" value="{{ query }}" id="hidden-social">
+          <button class="btn btn-warning btn-sm mr-4 " id="social_media_btn" data-toggle="modal" data-target="#social_media">Social Media Data</button>
+          <a href="{% url 'crawler:api'  query  %}"  target="_blank" class="btn btn-info btn-sm font-weight-bold">Generate API for the Report {{ query|upper }}</a>
+        </div>
+        <canvas id="chart-area_{{ forloop.counter }}"></canvas>
+        <div id="chartjs-tooltip_{{ forloop.counter }}">
+                    <table></table>
+        </div>
+    </div>
+
+
+
+      <div class="card-columns mt-4 mb-4 mr-4">
+
+        {% for keys, values in wikis.items %}
+        <div class="card p-3">
+          <div class="card-body">
+            <h5 class="card-title"><a href="{{ keys }}" target="_blank" data-toggle="popover" data-content="{{ keys }}" data-trigger="hover" data-placement="top">Scrape Preview</a> </h5>
+
+            <table class="table table-sm ">
+
+                <tbody>
+                {% for key, value in values.items %}
+                  <tr>
+                    <th scope="row" class="section-title">{{ key }}</th>
+                    <td class="section-title-light">{{ value }}</td>
+                  </tr>
+                {% endfor %}
+                </tbody>
+              </table>
+
+          </div>
+        </div>
+        {% endfor %}
+
+        {% if video_links %}
+  <div class="card text-white text-center p-3">
+    <blockquote class="blockquote mb-0">
+      {% for link in video_links %}
+      <p><a href="{{ link }}" target="_blank">{{ link }}</a></p>
+      {% endfor %}
+      <footer class="blockquote-footer">
+        <small>
+          Crawled by <cite title="Source Title">FALCON</cite>
+        </small>
+      </footer>
+    </blockquote>
+  </div>
+
+        {% endif %}
+
+        {% if pdfs %}
+  <div class="card text-white text-center p-3 bg-gray-600">
+    <blockquote class="blockquote mb-0">
+      {% for pdf in pdfs %}
+      <p><a href="{{ pdf }}" target="_blank">{{ pdf }}</a></p>
+      {% endfor %}
+      <footer class="blockquote-footer">
+        <small>
+          Crawled by <cite title="Source Title">FALCON</cite>
+        </small>
+      </footer>
+    </blockquote>
+  </div>
+
+        {% endif %}
+
+
+        {% if image_predict %}
+        {% for image, lists in image_predict.items %}
+        <div class="card text-white text-center  bg-gray-800">
+            <img class="card-img-top {% if lists.2|percent > 80 or lists.3|percent > 80 %}blur{% endif %}" src="{{ image }}" alt="{{ image }} pictures">
+            <div class="card-body">
+              <div class="d-flex bd-highlight">
+                  <p class="p-2 flex-fill bd-highlight section-title-light">Child Abuse: {{ lists.0|percent }} %</p>
+                  <p class="p-2 flex-fill bd-highlight section-title-light">Murder: {{ lists.1|percent }} %</p>
+                  <p class="p-2 flex-fill bd-highlight section-title-light">Rape: {{ lists.2|percent }} %</p>
+                  <p class="p-2 flex-fill bd-highlight section-title-light">Woman Abuse: {{ lists.3|percent }} %</p>
+              </div>
+            </div>
+        <blockquote class="blockquote mb-0">
+            <footer class="blockquote-footer">
+              <small>
+                Crawled by <cite title="Source Title">FALCON</cite>
+              </small>
+            </footer>
+          </blockquote>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+
+<!--        {% if images %}-->
+<!--        {% for image in images %}-->
+<!--        <div class="card text-white text-center p-3 bg-gray-800">-->
+<!--          <blockquote class="blockquote mb-0">-->
+
+<!--            <img class="img-thumbnail m-2" src="{{ image }}" alt="{{ image }} pictures" >-->
+
+<!--            <footer class="blockquote-footer">-->
+<!--              <small>-->
+<!--                Crawled by <cite title="Source Title">FALCON</cite>-->
+<!--              </small>-->
+<!--            </footer>-->
+<!--          </blockquote>-->
+<!--        </div>-->
+<!--        {% endfor %}-->
+<!--        {% endif %}-->
+
+
+
+
+      </div>
+
+
+
+
+    <div class="row mt-4 mb-4 justify-content-md-center"><div class="col"><h2 class="text-center" style="font-family:'Montserrat'">SUMMARIZED DATA</h2></div></div>
+
+    <div class="row">
+
+      <div class="card-columns">
+
+        <div class="card bg-dark text-white text-center p-3">
+          <blockquote class="blockquote mb-0">
+            <a href="{% url 'crawler:api'  query  %}"  target="_blank" class="btn btn-info btn-sm font-weight-bold">API for this result.</a>
+            <footer class="blockquote-footer">
+              <small>
+                Results compiled for keyword: <cite title="Source Title"> {{ query }}</cite>
+              </small>
+            </footer>
+          </blockquote>
+        </div>
+
+
+
+        {% for keyword, values in news_data1.items %}
+
+        {% if query|stringformat:"s" == keyword|stringformat:"s" %}
+        {% for value in values %}
+        <div class="card p-3">
+          <div class="card-body">
+            <h5 class="card-title"><a href="{{ value.link }}">{{ value.title }}</a> </h5>
+            <h6 class="card-subtitle mb-2 text-muted">for keyword {{ keyword }}</h6>
+            <p class="card-text">{{ value.desc }}</p>
+            <a href="{{ value.link }}" class="card-link">Link</a>
+            <p class="card-text">by {{ value.media }}</p>
+
+            <p class="card-text"><small class="text-muted">Last updated {{ value.date }}</small></p>
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% endfor %}
+
+
+      </div>
+
+    </div>
+
+
+  </div>
+  {% endfor %}
+
+  {% if list2 %}
+  {% for query in list2 %}
+  <div class="tab-pane fade" id="dropdown_{{ forloop.counter }}">
+    <div class="row">
+        <div class="row">
+          <button class="btn btn-dark btn-sm mr-4" id="generate_report">Generate Report</button>
+          <button class="btn btn-dark btn-sm" >Keyword Analysis</button>
+        </div>
+        <canvas id="chart-area_{{ forloop.counter|add:'2' }}"></canvas>
+        <div id="chartjs-tooltip_{{ forloop.counter|add:'2' }}">
+                    <table></table>
+        </div>
+    </div>
+
+    <div class="row mt-4 mb-4 justify-content-md-center"><div class="col"><h2 class="text-center" style="font-family:'Montserrat'">SUMMARIZED DATA</h2></div></div>
+
+    <div class="row">
+
+      <div class="card-columns">
+
+        <div class="card bg-dark text-white text-center p-3">
+          <blockquote class="blockquote mb-0">
+            <a href="{% url 'crawler:api'  query  %}"  target="_blank" class="btn btn-info btn-sm font-weight-bold">API for this result.</a>
+            <footer class="blockquote-footer">
+              <small>
+                Results compiled for keyword: <cite title="Source Title"> {{ query }}</cite>
+              </small>
+            </footer>
+          </blockquote>
+        </div>
+
+
+
+        {% for keyword, values in news_data2.items %}
+
+        {% if query|stringformat:"s" == keyword|stringformat:"s" %}
+        {% for value in values %}
+        <div class="card p-3">
+          <div class="card-body">
+            <h5 class="card-title"><a href="{{ value.link }}">{{ value.title }} </a></h5>
+            <h6 class="card-subtitle mb-2 text-muted">for keyword {{ keyword }}</h6>
+            <p class="card-text">{{ value.desc }}</p>
+            <a href="{{ value.link }}" class="card-link">Link</a>
+            <p class="card-text">by {{ value.media }}</p>
+
+            <p class="card-text"><small class="text-muted">Last updated {{ value.date }}</small></p>
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+
+        {% endfor %}
+
+
+      </div>
+
+    </div>
+
+
+  </div>
+  {% endfor %}
+  {% endif %}
+
+</div>
+
+
+
+</div>
+
+
+
+
+
+
+{% endblock %}
+
+{% block script %}
+
+<script
+	  src="https://code.jquery.com/jquery-3.3.1.min.js"
+	  integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8="
+	  crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+
+
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.min.js" integrity="sha384-OgVRvuATP1z7JjHLkuOU7Xw704+h835Lr+6QL9UvYjZE3Ipu6Tp75j7Bh/kR0JKI" crossorigin="anonymous"></script>
+
+<script data-cfasync="false" src="../cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script src="{% static 'js/app.min.js' %}" type="59f984106ec2e39727363fa8-text/javascript"></script>
+<script src="{% static 'plugins/chart.js/dist/Chart.min.js' %}" ></script>
+<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/emn178/chartjs-plugin-labels/src/chartjs-plugin-labels.js"></script>
+<script type="59f984106ec2e39727363fa8-text/javascript">
+	  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+	  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+	  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+	  })(window,document,'script','../../www.google-analytics.com/analytics.js','ga');
+
+	  ga('create', 'UA-53034621-1', 'auto');
+	  ga('send', 'pageview');
+
+	</script>
+	
+<script>
+
+
+{% for key, value in count_list1.items %}
+
+Chart.defaults.global.tooltips.custom = function(tooltip) {
+			// Tooltip Element
+			var tooltipEl = document.getElementById('chartjs-tooltip_{{ forloop.counter }}');
+
+			// Hide if no tooltip
+			if (tooltip.opacity === 0) {
+				tooltipEl.style.opacity = 0;
+				return;
+			}
+
+			// Set caret Position
+			tooltipEl.classList.remove('above', 'below', 'no-transform');
+			if (tooltip.yAlign) {
+				tooltipEl.classList.add(tooltip.yAlign);
+			} else {
+				tooltipEl.classList.add('no-transform');
+			}
+
+			function getBody(bodyItem) {
+				return bodyItem.lines;
+			}
+
+
+
+			// Set Text
+			if (tooltip.body) {
+				var titleLines = tooltip.title || [];
+				var bodyLines = tooltip.body.map(getBody);
+                var results = {{ temp_list1|safe }}
+                var resultLines = results || []
+
+				var innerHtml = '<thead>';
+
+				titleLines.forEach(function(title,i) {
+					innerHtml += '<tr><th>' + title + '</th></tr>';
+				});
+				innerHtml += '</thead><tbody class="text-center mb-2" >';
+
+				bodyLines.forEach(function(body, i) {
+					var colors = tooltip.labelColors[i];
+					var style = 'background:' + colors.backgroundColor;
+					style += '; border-color:' + colors.borderColor;
+					style += '; border-width: 2px';
+					var span = '<span class="chartjs-tooltip-key" style="' + style + '"></span>';
+					innerHtml += '<tr><td>' + span + body + '</td></tr>';
+				});
+
+
+				resultLines.forEach(function(body, i){
+				  for(j=0; j<body.length;j++){
+				      innerHtml += '<tr><td><a class="btn btn-black btn-sm" data-toggle="modal" data-target="#modalLg_' + j + '" href="#" >' + 'Link ' + j + ': ' + body[j].slice(12, 38) + '...</a></td></tr>';
+				  }
+
+				});
+
+				innerHtml += '<tr class="mt-2"><td><a href="#">See More</a></td></tr>';
+
+				innerHtml += '</tbody>';
+
+<!--				innerHtml += '<br><button type="button" class="btn btn-primary" data-toggle="modal" data-target="#modalLg">click me</button><br><a href="google.com">See more</a>';-->
+
+<!--                innerHtml += `{% autoescape off %}{% for key, value in results.items %}-->
+<!--                <br>{% for link in value %}-->
+<!--                  <a href="{{ link }}">link {{ forloop.counter }}</a><br>-->
+<!--                {% endfor %}-->
+
+<!--                {% endfor %}<br><a href="#">See more</a>{% endautoescape %}`;-->
+
+				var tableRoot = tooltipEl.querySelector('table');
+				tableRoot.innerHTML = innerHtml;
+			}
+
+			var positionY = this._chart.canvas.offsetTop;
+			var positionX = this._chart.canvas.offsetLeft;
+
+			// Display, position, and set styles for font
+			tooltipEl.style.opacity = 1;
+			tooltipEl.style.left = window.pageXOffset + positionX + tooltip.caretX + 'px';
+			tooltipEl.style.top = window.pageYOffset + positionY + tooltip.caretY -200+ 'px';
+			tooltipEl.style.fontFamily = tooltip._bodyFontFamily;
+			tooltipEl.style.fontSize = tooltip.bodyFontSize;
+			tooltipEl.style.fontStyle = tooltip._bodyFontStyle;
+			tooltipEl.style.padding = tooltip.yPadding + 'px ' + tooltip.xPadding + 'px';
+		};
+
+
+		var config = {
+			type: 'doughnut',
+			data: {
+				datasets: [{
+					data: {{ value|safe }},
+					backgroundColor: {{ random_colors|safe }},
+				}],
+				labels: {{ labels| safe }}
+			},
+			options: {
+				events: ['mousemove', 'mouseout'],
+				responsive: true,
+				plugins: {
+		          labels: [
+					    {
+					      render: 'label',
+					      position: 'outside',
+					      fontFamily: '"Montserrat"'
+					    },
+					    {
+					      render: 'percentage',
+					      fontFamily: '"Montserrat"',
+					      fontColor: "#ffffff"
+					    }
+					  ]
+		        },
+				legend: {
+					display: true,
+					position: 'right'
+				},
+				onHover: function (event, chartElement) {
+			      event.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+			      myPie_{{ forloop.counter }}.update()
+    				chartElement[0]._model.outerRadius += 20
+  
+			    },
+				tooltips: {
+					enabled: false,
+				}
+			}
+		};
+
+
+			var ctx_{{ forloop.counter }} = document.getElementById('chart-area_{{ forloop.counter }}').getContext('2d');
+			window.myPie_{{ forloop.counter }} = new Chart(ctx_{{ forloop.counter }}, config);
+
+			document.getElementById("chart-area_{{ forloop.counter }}").onclick = function(evt) {
+	      var activePoints = myPie_{{ forloop.counter }}.getElementsAtEvent(evt);
+	      if (activePoints[0]) {
+	        var chartData = activePoints[0]['_chart'].config.data;
+	        var idx = activePoints[0]['_index'];
+
+	        var label = chartData.labels[idx];
+	        var value = chartData.datasets[0].data[idx];
+
+	        var url = "http://example.com/?label=" + label + "&value=" + value;
+	        $('#details').modal('show');
+	        // alert(url);
+	      }
+    };
+
+
+
+
+
+  
+  Chart.pluginService.register({
+  beforeDraw: function(chart) {
+    var width = chart.chart.width,
+        height = chart.chart.height,
+        ctx = chart.chart.ctx;
+
+    ctx.restore();
+    var fontSize = ((height / 200 )+0.5).toFixed(2);
+    ctx.font = fontSize  + "em Montserrat";
+    ctx.textBaseline = "middle";
+
+    var text = "FALCON",
+        textX = Math.round((width - ctx.measureText(text).width) / 2 - 70),
+        textY = height / 2;
+
+    ctx.fillText(text, textX, textY);
+    ctx.save();
+  }
+});
+
+{% endfor %}
+
+  
+</script>
+
+<script>
+
+
+{% for key, value in count_list2.items %}
+
+Chart.defaults.global.tooltips.custom = function(tooltip) {
+			// Tooltip Element
+			var tooltipEl = document.getElementById('chartjs-tooltip_{{ forloop.counter|add:'2' }}');
+
+			// Hide if no tooltip
+			if (tooltip.opacity === 0) {
+				tooltipEl.style.opacity = 0;
+				return;
+			}
+
+			// Set caret Position
+			tooltipEl.classList.remove('above', 'below', 'no-transform');
+			if (tooltip.yAlign) {
+				tooltipEl.classList.add(tooltip.yAlign);
+			} else {
+				tooltipEl.classList.add('no-transform');
+			}
+
+			function getBody(bodyItem) {
+				return bodyItem.lines;
+			}
+
+
+
+			// Set Text
+			if (tooltip.body) {
+				var titleLines = tooltip.title || [];
+				var bodyLines = tooltip.body.map(getBody);
+                var results = {{ temp_list1|safe }}
+                var resultLines = results || []
+
+				var innerHtml = '<thead>';
+
+				titleLines.forEach(function(title,i) {
+					innerHtml += '<tr><th>' + title + '</th></tr>';
+				});
+				innerHtml += '</thead><tbody class="text-center mb-2" >';
+
+				bodyLines.forEach(function(body, i) {
+					var colors = tooltip.labelColors[i];
+					var style = 'background:' + colors.backgroundColor;
+					style += '; border-color:' + colors.borderColor;
+					style += '; border-width: 2px';
+					var span = '<span class="chartjs-tooltip-key" style="' + style + '"></span>';
+					innerHtml += '<tr><td>' + span + body + '</td></tr>';
+				});
+
+
+				resultLines.forEach(function(body, i){
+				  for(j=0; j<body.length;j++){
+				      innerHtml += '<tr><td><a class="btn btn-black btn-sm" data-toggle="modal" data-target="#modalLg_' + j + '" href="#" >' + 'Link ' + j + ': ' + body[j].slice(12, 38) + '...</a></td></tr>';
+				  }
+
+				});
+
+				innerHtml += '<tr class="mt-2"><td><a href="#">See More</a></td></tr>';
+
+				innerHtml += '</tbody>';
+
+<!--				innerHtml += '<br><button type="button" class="btn btn-primary" data-toggle="modal" data-target="#modalLg">click me</button><br><a href="google.com">See more</a>';-->
+
+<!--                innerHtml += `{% autoescape off %}{% for key, value in results.items %}-->
+<!--                <br>{% for link in value %}-->
+<!--                  <a href="{{ link }}">link {{ forloop.counter }}</a><br>-->
+<!--                {% endfor %}-->
+
+<!--                {% endfor %}<br><a href="#">See more</a>{% endautoescape %}`;-->
+
+				var tableRoot = tooltipEl.querySelector('table');
+				tableRoot.innerHTML = innerHtml;
+			}
+
+			var positionY = this._chart.canvas.offsetTop;
+			var positionX = this._chart.canvas.offsetLeft;
+
+			// Display, position, and set styles for font
+			tooltipEl.style.opacity = 1;
+			tooltipEl.style.left = window.pageXOffset + positionX + tooltip.caretX + 'px';
+			tooltipEl.style.top = window.pageYOffset + positionY + tooltip.caretY -200+ 'px';
+			tooltipEl.style.fontFamily = tooltip._bodyFontFamily;
+			tooltipEl.style.fontSize = tooltip.bodyFontSize;
+			tooltipEl.style.fontStyle = tooltip._bodyFontStyle;
+			tooltipEl.style.padding = tooltip.yPadding + 'px ' + tooltip.xPadding + 'px';
+		};
+
+
+		var config = {
+			type: 'doughnut',
+			data: {
+				datasets: [{
+					data: {{ value|safe }},
+					backgroundColor: [
+						'#111',
+						'#f59042',
+						'#555644',
+						'#444'
+					],
+				}],
+				labels: {{ labels| safe }}
+			},
+			options: {
+				events: ['mousemove', 'mouseout'],
+				responsive: true,
+				plugins: {
+		          labels: [
+					    {
+					      render: 'label',
+					      position: 'outside',
+					      fontFamily: '"Montserrat"'
+					    },
+					    {
+					      render: 'percentage',
+					      fontFamily: '"Montserrat"',
+					      fontColor: "#ffffff"
+					    }
+					  ]
+		        },
+				legend: {
+					display: true,
+					position: 'right'
+				},
+				onHover: function (event, chartElement) {
+			      event.target.style.cursor = chartElement[0] ? 'pointer' : 'default';
+			      myPie_{{ forloop.counter|add:'2' }}.update()
+    				chartElement[0]._model.outerRadius += 20
+
+			    },
+				tooltips: {
+					enabled: false,
+				}
+			}
+		};
+
+
+			var ctx_{{ forloop.counter|add:'2' }} = document.getElementById('chart-area_{{ forloop.counter|add:'2' }}').getContext('2d');
+			window.myPie_{{ forloop.counter|add:'2' }} = new Chart(ctx_{{ forloop.counter|add:'2' }}, config);
+
+			document.getElementById("chart-area_{{ forloop.counter|add:'2' }}").onclick = function(evt) {
+	      var activePoints = myPie_{{ forloop.counter|add:'2' }}.getElementsAtEvent(evt);
+	      if (activePoints[0]) {
+	        var chartData = activePoints[0]['_chart'].config.data;
+	        var idx = activePoints[0]['_index'];
+
+	        var label = chartData.labels[idx];
+	        var value = chartData.datasets[0].data[idx];
+
+	        var url = "http://example.com/?label=" + label + "&value=" + value;
+	        $('#details').modal('show');
+	        // alert(url);
+	      }
+    };
+
+
+
+
+
+
+  Chart.pluginService.register({
+  beforeDraw: function(chart) {
+    var width = chart.chart.width,
+        height = chart.chart.height,
+        ctx = chart.chart.ctx;
+
+    ctx.restore();
+    var fontSize = ((height / 200 )+0.5).toFixed(2);
+    ctx.font = fontSize  + "em Montserrat";
+    ctx.textBaseline = "middle";
+
+    var text = "FALCON",
+        textX = Math.round((width - ctx.measureText(text).width) / 2 - 70),
+        textY = height / 2;
+
+    ctx.fillText(text, textX, textY);
+    ctx.save();
+  }
+});
+
+{% endfor %}
+
+
+</script>
+
+<script>
+  $('#generate_report').click(function(){
+			 $('#report_toast').toast('show');
+
+			 var keyword = $('.nav-tabs .active').attr('data-keyword');
+			 console.log(keyword);
+
+			 $.ajax({
+            url: "/update-notifications/",
+            type: "POST",
+            data: { 'status' : true, "csrfmiddlewaretoken" : $("input[name=csrfmiddlewaretoken]").val(), 'keyword' : keyword },
+            success: function(response){
+					$('#unread-update').html(response);
+            }
+
+        });
+
+});
+
+
+$('#notification-read').click(function(){
+	$.ajax({
+            url: "/read/",
+            type: "POST",
+            data: { 'status' : true, "csrfmiddlewaretoken" : $("input[name=csrfmiddlewaretoken]").val()},
+            success: function(response){
+					$('#unread-update').html(response);
+            }
+
+        });
+
+        $.ajax({
+            url: "/update-notifications-base/",
+            type: "POST",
+            data: { 'status' : true, "csrfmiddlewaretoken" : $("input[name=csrfmiddlewaretoken]").val()},
+            success: function(response){
+					$('#notification_area').html(response);
+            }
+
+        });
+
+});
+
+$('#social_media_btn').click(function(){
+
+
+	$.ajax({
+            url: "/social-scrape-data/",
+            type: "POST",
+            data: { 'keyword' : $('#hidden-social').val(), "csrfmiddlewaretoken" : $("input[name=csrfmiddlewaretoken]").val()},
+            success: function(response){
+              $('#social_media_body').html(response);
+            }
+
+        });
+
+
+});
+
+$('[data-toggle="popover"]').popover();
+
+</script>
+
+
+
+<script src="../../ajax.cloudflare.com/cdn-cgi/scripts/7089c43e/cloudflare-static/rocket-loader.min.js" data-cf-settings="59f984106ec2e39727363fa8-|49" defer=""></script></body>
+
+{% endblock %}
