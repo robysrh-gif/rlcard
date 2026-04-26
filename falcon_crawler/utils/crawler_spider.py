@@ -3,7 +3,10 @@ import re
 import random
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
-from twitterscraper import query_tweets
+try:
+    from twitterscraper import query_tweets
+except Exception:
+    query_tweets = None
 import datetime as dt
 from ast import literal_eval
 
@@ -191,7 +194,7 @@ def wiki_scraping(link):
     page = requests.get(str(link.split('%')[0]))
     infobox = dict()
     empty = True
-    if page.status_code is 200:
+    if page.status_code == 200:
         print("first success")
         soup = BeautifulSoup(page.content, 'html.parser')
         try:
@@ -270,6 +273,8 @@ def scraper(link):
 
 
 def social_media_scrape(keyword):
+    if query_tweets is None:
+        return []
     result = {}
     temp = {}
     base_url = 'twitter.com'
