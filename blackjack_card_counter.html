@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Blackjack Card Counter — Hi-Lo</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #0a3d1f;
+      color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 10px 40px;
+    }
+
+    h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #ffd700;
+      text-shadow: 0 2px 8px #000a;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      font-size: 0.95rem;
+      color: #a8d5b5;
+      margin-bottom: 22px;
+      letter-spacing: 1px;
+    }
+
+    /* ── Deck config ── */
+    .config-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .config-row label {
+      font-size: 1rem;
+      color: #c8e6c9;
+    }
+
+    .config-row select {
+      font-size: 1.1rem;
+      padding: 6px 14px;
+      border-radius: 8px;
+      border: none;
+      background: #1b5e20;
+      color: #fff;
+      cursor: pointer;
+    }
+
+    .btn-reset {
+      padding: 8px 24px;
+      font-size: 1rem;
+      font-weight: 700;
+      border-radius: 10px;
+      border: none;
+      background: #c62828;
+      color: #fff;
+      cursor: pointer;
+      letter-spacing: 1px;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-reset:hover { background: #e53935; }
+    .btn-reset:active { transform: scale(0.96); }
+
+    /* ── Counts panel ── */
+    .counts-panel {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 22px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .count-box {
+      background: #113a1e;
+      border: 2px solid #2e7d32;
+      border-radius: 16px;
+      padding: 14px 28px;
+      text-align: center;
+      min-width: 130px;
+    }
+
+    .count-box .label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #81c784;
+      margin-bottom: 4px;
+    }
+
+    .count-box .value {
+      font-size: clamp(2.2rem, 6vw, 3.4rem);
+      font-weight: 900;
+      line-height: 1;
+      transition: color 0.3s;
+    }
+
+    .count-box .sub {
+      font-size: 0.75rem;
+      color: #66bb6a;
+      margin-top: 2px;
+    }
+
+    /* ── Deck penetration bar ── */
+    .penetration-wrap {
+      width: 100%;
+      max-width: 540px;
+      margin-bottom: 20px;
+    }
+
+    .pen-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: #a5d6a7;
+      margin-bottom: 4px;
+    }
+
+    .pen-bar-bg {
+      background: #1b5e20;
+      border-radius: 8px;
+      height: 14px;
+      overflow: hidden;
+    }
+
+    .pen-bar-fill {
+      height: 100%;
+      border-radius: 8px;
+      background: linear-gradient(90deg, #43a047, #ffd740);
+      transition: width 0.3s;
+    }
+
+    /* ── BET ALERT ── */
+    .bet-alert {
+      width: 100%;
+      max-width: 540px;
+      border-radius: 18px;
+      padding: 18px 20px;
+      text-align: center;
+      margin-bottom: 22px;
+      font-size: clamp(1.2rem, 3.5vw, 1.7rem);
+      font-weight: 900;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      transition: background 0.4s, color 0.4s, box-shadow 0.4s;
+      border: 3px solid transparent;
+    }
+
+    .bet-alert.min {
+      background: #1b4332;
+      border-color: #2d6a4f;
+      color: #74c69d;
+    }
+
+    .bet-alert.low {
+      background: #1a3a1a;
+      border-color: #52b788;
+      color: #b7e4c7;
+    }
+
+    .bet-alert.medium {
+      background: #7a4f00;
+      border-color: #f9c74f;
+      color: #ffe066;
+      box-shadow: 0 0 18px #f9c74f88;
+      animation: pulse-yellow 1.2s ease-in-out infinite;
+    }
+
+    .bet-alert.high {
+      background: #6d0000;
+      border-color: #ff4d4d;
+      color: #ff9a9a;
+      box-shadow: 0 0 28px #ff000088;
+      animation: pulse-red 0.8s ease-in-out infinite;
+    }
+
+    .bet-alert.max {
+      background: #000;
+      border-color: #ff0000;
+      color: #ff0000;
+      box-shadow: 0 0 40px #ff000099, inset 0 0 20px #3300000a;
+      animation: pulse-max 0.6s ease-in-out infinite;
+      font-size: clamp(1.6rem, 4.5vw, 2.2rem);
+    }
+
+    @keyframes pulse-yellow {
+      0%, 100% { box-shadow: 0 0 18px #f9c74f88; }
+      50%       { box-shadow: 0 0 36px #f9c74fcc; }
+    }
+    @keyframes pulse-red {
+      0%, 100% { box-shadow: 0 0 28px #ff000088; }
+      50%       { box-shadow: 0 0 52px #ff0000cc; }
+    }
+    @keyframes pulse-max {
+      0%, 100% { box-shadow: 0 0 40px #ff000099, inset 0 0 20px #00000000; transform: scale(1); }
+      50%       { box-shadow: 0 0 70px #ff0000ff, inset 0 0 20px #33000020; transform: scale(1.025); }
+    }
+
+    .bet-alert .bet-icon { font-size: 1.6em; vertical-align: middle; margin-right: 8px; }
+    .bet-alert .bet-multiplier { display: block; font-size: 0.65em; font-weight: 700; margin-top: 4px; opacity: 0.85; }
+
+    /* ── Card buttons ── */
+    .cards-section {
+      width: 100%;
+      max-width: 580px;
+    }
+
+    .cards-section h2 {
+      text-align: center;
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #81c784;
+      margin-bottom: 14px;
+    }
+
+    .card-group {
+      margin-bottom: 14px;
+    }
+
+    .group-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+      padding-left: 4px;
+    }
+
+    .group-label.positive { color: #69db7c; }
+    .group-label.neutral  { color: #adb5bd; }
+    .group-label.negative { color: #ff6b6b; }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .card-btn {
+      flex: 1 1 0;
+      min-width: 60px;
+      padding: 18px 8px;
+      font-size: clamp(1.3rem, 4vw, 2rem);
+      font-weight: 900;
+      border-radius: 14px;
+      border: 3px solid transparent;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.15s, background 0.15s;
+      position: relative;
+      user-select: none;
+    }
+
+    .card-btn:active { transform: scale(0.93); }
+
+    .card-btn .flash {
+      position: absolute;
+      inset: 0;
+      border-radius: 11px;
+      background: #fff4;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s;
+    }
+
+    .card-btn.flashing .flash { opacity: 1; }
+
+    /* Positive cards (2–6) */
+    .card-btn.pos {
+      background: #1a6b2a;
+      border-color: #40c057;
+      color: #b2f2bb;
+      box-shadow: 0 4px 12px #00000060;
+    }
+    .card-btn.pos:hover { background: #2f9e44; box-shadow: 0 6px 18px #40c05755; }
+
+    /* Neutral cards (7–9) */
+    .card-btn.neu {
+      background: #2c3347;
+      border-color: #748ffc;
+      color: #bac8ff;
+      box-shadow: 0 4px 12px #00000060;
+    }
+    .card-btn.neu:hover { background: #3b4b73; box-shadow: 0 6px 18px #748ffc55; }
+
+    /* Negative cards (10, J, Q, K, A) */
+    .card-btn.neg {
+      background: #6e0f0f;
+      border-color: #ff6b6b;
+      color: #ffc9c9;
+      box-shadow: 0 4px 12px #00000060;
+    }
+    .card-btn.neg:hover { background: #9b1c1c; box-shadow: 0 6px 18px #ff6b6b55; }
+
+    /* ── History ── */
+    .history-section {
+      width: 100%;
+      max-width: 540px;
+      margin-top: 24px;
+    }
+
+    .history-section h2 {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: #81c784;
+      margin-bottom: 10px;
+      text-align: center;
+    }
+
+    .history-log {
+      background: #0d2b14;
+      border-radius: 12px;
+      padding: 12px 14px;
+      max-height: 130px;
+      overflow-y: auto;
+      font-size: 0.82rem;
+      color: #a5d6a7;
+      line-height: 1.7;
+      word-break: break-word;
+    }
+
+    .history-log:empty::before {
+      content: 'No cards logged yet.';
+      color: #4a7c59;
+    }
+
+    .history-log .entry { display: inline; }
+    .history-log .card-pos { color: #69db7c; font-weight: 700; }
+    .history-log .card-neu { color: #74c0fc; font-weight: 700; }
+    .history-log .card-neg { color: #ff8787; font-weight: 700; }
+
+    /* ── Footer hint ── */
+    .hint {
+      margin-top: 28px;
+      font-size: 0.72rem;
+      color: #4a7c59;
+      text-align: center;
+      max-width: 420px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+
+<h1>🃏 Blackjack Card Counter</h1>
+<p class="subtitle">Hi-Lo System &nbsp;|&nbsp; Tap each card as it's dealt</p>
+
+<!-- Config row -->
+<div class="config-row">
+  <label for="deckSelect">Decks in shoe:</label>
+  <select id="deckSelect">
+    <option value="1">1 deck</option>
+    <option value="2">2 decks</option>
+    <option value="4">4 decks</option>
+    <option value="6" selected>6 decks</option>
+    <option value="8">8 decks</option>
+  </select>
+  <button class="btn-reset" onclick="resetCounter()">↺ New Shoe</button>
+</div>
+
+<!-- Counts -->
+<div class="counts-panel">
+  <div class="count-box">
+    <div class="label">Running Count</div>
+    <div class="value" id="runningCount">0</div>
+    <div class="sub">raw Hi-Lo tally</div>
+  </div>
+  <div class="count-box">
+    <div class="label">True Count</div>
+    <div class="value" id="trueCount">0</div>
+    <div class="sub">per deck remaining</div>
+  </div>
+  <div class="count-box">
+    <div class="label">Cards Seen</div>
+    <div class="value" id="cardsSeen" style="font-size:2rem">0</div>
+    <div class="sub" id="cardsLeft">—</div>
+  </div>
+</div>
+
+<!-- Penetration bar -->
+<div class="penetration-wrap">
+  <div class="pen-label">
+    <span>Shoe start</span>
+    <span id="penPct">0% dealt</span>
+    <span>Shoe end</span>
+  </div>
+  <div class="pen-bar-bg">
+    <div class="pen-bar-fill" id="penBar" style="width:0%"></div>
+  </div>
+</div>
+
+<!-- Bet alert -->
+<div class="bet-alert min" id="betAlert">
+  <span class="bet-icon">💤</span> Minimum Bet
+  <span class="bet-multiplier">True Count &lt; 1 — no edge yet</span>
+</div>
+
+<!-- Card buttons -->
+<div class="cards-section">
+  <h2>Tap every card you see dealt</h2>
+
+  <div class="card-group">
+    <div class="group-label positive">+1 cards &nbsp;— low cards, good for you</div>
+    <div class="btn-row">
+      <button class="card-btn pos" onclick="logCard('2', +1)"><span class="flash"></span>2</button>
+      <button class="card-btn pos" onclick="logCard('3', +1)"><span class="flash"></span>3</button>
+      <button class="card-btn pos" onclick="logCard('4', +1)"><span class="flash"></span>4</button>
+      <button class="card-btn pos" onclick="logCard('5', +1)"><span class="flash"></span>5</button>
+      <button class="card-btn pos" onclick="logCard('6', +1)"><span class="flash"></span>6</button>
+    </div>
+  </div>
+
+  <div class="card-group">
+    <div class="group-label neutral">0 cards &nbsp;— neutral, ignore</div>
+    <div class="btn-row">
+      <button class="card-btn neu" onclick="logCard('7', 0)"><span class="flash"></span>7</button>
+      <button class="card-btn neu" onclick="logCard('8', 0)"><span class="flash"></span>8</button>
+      <button class="card-btn neu" onclick="logCard('9', 0)"><span class="flash"></span>9</button>
+    </div>
+  </div>
+
+  <div class="card-group">
+    <div class="group-label negative">−1 cards &nbsp;— high cards, dealer-friendly</div>
+    <div class="btn-row">
+      <button class="card-btn neg" onclick="logCard('10', -1)"><span class="flash"></span>10</button>
+      <button class="card-btn neg" onclick="logCard('J', -1)"><span class="flash"></span>J</button>
+      <button class="card-btn neg" onclick="logCard('Q', -1)"><span class="flash"></span>Q</button>
+      <button class="card-btn neg" onclick="logCard('K', -1)"><span class="flash"></span>K</button>
+      <button class="card-btn neg" onclick="logCard('A', -1)"><span class="flash"></span>A</button>
+    </div>
+  </div>
+</div>
+
+<!-- History -->
+<div class="history-section">
+  <h2>Card Log</h2>
+  <div class="history-log" id="historyLog"></div>
+</div>
+
+<p class="hint">
+  Hi-Lo assigns +1 to low cards (2–6), 0 to neutral (7–9), and −1 to high cards (10–A).
+  True Count = Running Count ÷ Decks Remaining. The higher the true count, the bigger you should bet.
+</p>
+
+<script>
+  let runningCount = 0;
+  let cardsSeen = 0;
+  let totalDecks = 6;
+  let historyCards = [];
+
+  const CARDS_PER_DECK = 52;
+
+  function getDecks() {
+    return parseInt(document.getElementById('deckSelect').value);
+  }
+
+  function logCard(label, value) {
+    runningCount += value;
+    cardsSeen++;
+    historyCards.push({ label, value });
+
+    // Flash animation
+    const btns = document.querySelectorAll('.card-btn');
+    btns.forEach(btn => {
+      if (btn.textContent.trim().startsWith(label)) {
+        btn.classList.add('flashing');
+        setTimeout(() => btn.classList.remove('flashing'), 180);
+      }
+    });
+
+    updateDisplay();
+  }
+
+  function resetCounter() {
+    runningCount = 0;
+    cardsSeen = 0;
+    historyCards = [];
+    document.getElementById('historyLog').innerHTML = '';
+    updateDisplay();
+  }
+
+  function getTrueCount() {
+    totalDecks = getDecks();
+    const totalCards = totalDecks * CARDS_PER_DECK;
+    const cardsLeft = Math.max(totalCards - cardsSeen, 1);
+    const decksLeft = cardsLeft / CARDS_PER_DECK;
+    return runningCount / decksLeft;
+  }
+
+  function updateDisplay() {
+    totalDecks = getDecks();
+    const totalCards = totalDecks * CARDS_PER_DECK;
+    const cardsLeft = Math.max(totalCards - cardsSeen, 0);
+    const tc = getTrueCount();
+    const tcRounded = Math.round(tc * 10) / 10;
+
+    // Counts
+    const rcEl = document.getElementById('runningCount');
+    rcEl.textContent = runningCount > 0 ? '+' + runningCount : runningCount;
+    rcEl.style.color = runningCount > 0 ? '#69db7c' : runningCount < 0 ? '#ff8787' : '#f0f0f0';
+
+    const tcEl = document.getElementById('trueCount');
+    tcEl.textContent = tcRounded > 0 ? '+' + tcRounded.toFixed(1) : tcRounded.toFixed(1);
+    tcEl.style.color = tc > 1 ? '#ffd700' : tc < 0 ? '#ff8787' : '#f0f0f0';
+
+    document.getElementById('cardsSeen').textContent = cardsSeen;
+    document.getElementById('cardsLeft').textContent = cardsLeft + ' cards left';
+
+    // Penetration bar
+    const pct = Math.min((cardsSeen / totalCards) * 100, 100);
+    document.getElementById('penBar').style.width = pct + '%';
+    document.getElementById('penPct').textContent = Math.round(pct) + '% dealt';
+
+    // Bet alert
+    updateBetAlert(tc);
+
+    // History log
+    updateHistory();
+  }
+
+  function updateBetAlert(tc) {
+    const el = document.getElementById('betAlert');
+    el.className = 'bet-alert';
+
+    if (tc >= 4) {
+      el.classList.add('max');
+      el.innerHTML = `<span class="bet-icon">🚨</span> RAISE BET NOW — MAX BET!
+        <span class="bet-multiplier">True Count ${formatTC(tc)} — MASSIVE EDGE — BET THE TABLE MAX</span>`;
+    } else if (tc >= 3) {
+      el.classList.add('high');
+      el.innerHTML = `<span class="bet-icon">🔥</span> RAISE YOUR BET — 4× Unit
+        <span class="bet-multiplier">True Count ${formatTC(tc)} — Strong player edge</span>`;
+    } else if (tc >= 2) {
+      el.classList.add('medium');
+      el.innerHTML = `<span class="bet-icon">⬆️</span> Increase Bet — 2–3× Unit
+        <span class="bet-multiplier">True Count ${formatTC(tc)} — Positive edge building</span>`;
+    } else if (tc >= 1) {
+      el.classList.add('low');
+      el.innerHTML = `<span class="bet-icon">📈</span> Slight Edge — 1–2× Unit
+        <span class="bet-multiplier">True Count ${formatTC(tc)} — Small advantage, consider raising</span>`;
+    } else {
+      el.classList.add('min');
+      el.innerHTML = `<span class="bet-icon">💤</span> Minimum Bet
+        <span class="bet-multiplier">True Count ${formatTC(tc)} — No edge, keep bets small</span>`;
+    }
+  }
+
+  function formatTC(tc) {
+    const v = Math.round(tc * 10) / 10;
+    return (v > 0 ? '+' : '') + v.toFixed(1);
+  }
+
+  function updateHistory() {
+    const log = document.getElementById('historyLog');
+    const last = historyCards.slice(-80);
+    log.innerHTML = last.map(c => {
+      const cls = c.value > 0 ? 'card-neg' : c.value < 0 ? 'card-pos' : 'card-neu';
+      // Inverted class names intentionally: low card seen = negative for count log, high card = positive
+      const valCls = c.value > 0 ? 'card-pos' : c.value < 0 ? 'card-neg' : 'card-neu';
+      return `<span class="entry ${valCls}">[${c.label}] </span>`;
+    }).join('');
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // Re-render when deck count changes
+  document.getElementById('deckSelect').addEventListener('change', updateDisplay);
+
+  // Initial render
+  updateDisplay();
+</script>
+</body>
+</html>
