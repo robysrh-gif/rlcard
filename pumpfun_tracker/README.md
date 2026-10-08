@@ -26,6 +26,9 @@ Optional alert channels (environment variables):
 
 Tuning flags: `--alert-score 70 --min-change 0.5 --min-buyers 10 --max-tokens 1500`.
 
+The server binds to `127.0.0.1` by default and has no authentication. Put it
+behind a reverse proxy with auth before using `--host 0.0.0.0`.
+
 ## Architecture
 
 ```
@@ -106,7 +109,7 @@ end-to-end simulated run.
 
 - Persist trades to SQLite or Parquet, then backtest the weights against what
   happened next (for example, did the token reach 2× within 30 minutes of the alert?).
-- Holder concentration from `newTokenBalance` (already stored in `TokenState.balances`).
+- Holder concentration from the `newTokenBalance` field of each trade.
 - Creator reputation: track wallets whose earlier launches rugged.
 - Fetch token metadata from `uri` (image, socials) and add a "has socials" signal.
 - Keep tracking graduated tokens on PumpSwap/Raydium.

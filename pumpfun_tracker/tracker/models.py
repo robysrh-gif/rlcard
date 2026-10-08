@@ -38,7 +38,6 @@ class TokenState:
     creator_sold: bool = False
     migrated: bool = False
     trades: deque = field(default_factory=deque)
-    balances: dict = field(default_factory=dict)
 
     # Filled in by the scorer on every tick
     score: float = 0.0
@@ -67,14 +66,22 @@ class TokenState:
         while self.trades and self.trades[0].ts < cutoff:
             self.trades.popleft()
 
+    def recent(self, since: float) -> list:
+        """Trades at or after `since`, scanning back from the newest (cheap for short windows)."""
+        out = []
+        for t in reversed(self.trades):
+            if t.ts < since:
+                break
+            out.append(t)
+        out.reverse()
+        return out
+
     def mcap_at(self, ts: float) -> float:
         """Market cap as of `ts` (the last trade at or before it, else the launch price)."""
-        mcap = self.initial_mcap_sol
-        for t in self.trades:
-            if t.ts > ts:
-                break
-            mcap = t.mcap_sol
-        return mcap
+        for t in reversed(self.trades):
+            if t.ts <= ts:
+                return t.mcap_sol
+        return self.initial_mcap_sol
 
     def summary(self, now: float, sol_usd: Optional[float] = None) -> dict:
         return {

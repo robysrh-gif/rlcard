@@ -27,8 +27,8 @@ def saturate(x: float, scale: float) -> float:
 
 
 def compute_signals(token: TokenState, now: float) -> dict:
-    w1 = [t for t in token.trades if t.ts >= now - 60]
-    w5 = [t for t in token.trades if t.ts >= now - 300]
+    w5 = token.recent(now - 300)
+    w1 = [t for t in w5 if t.ts >= now - 60]
 
     base_1m = token.mcap_at(now - 60)
     base_5m = token.mcap_at(now - 300)

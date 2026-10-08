@@ -137,3 +137,32 @@ def test_simulated_feed_end_to_end():
     assert engine.alerts, "expected at least one rocket alert in five minutes of simulated flow"
     top = engine.ranked(5)
     assert top[0]["score"] >= top[-1]["score"]
+
+
+def test_malformed_messages_are_dropped_without_side_effects():
+    engine, _ = make_engine()
+    sim = _SimToken("dud")
+    token = launch(engine, sim)
+    before = (token.mcap_sol, token.trade_count)
+    bad = [
+        [1, 2], "x", None,
+        {"txType": "buy", "mint": ["x"]},
+        {"txType": "buy", "mint": sim.mint, "solAmount": "abc", "marketCapSol": 999},
+        {"txType": "buy", "mint": sim.mint, "solAmount": float("nan"), "marketCapSol": 999},
+        {"txType": "sell", "mint": sim.mint, "solAmount": 1, "marketCapSol": float("inf")},
+        {"txType": "create", "mint": "m2", "solAmount": {"a": 1}},
+    ]
+    for msg in bad:
+        assert engine.handle(msg) is None
+    assert (token.mcap_sol, token.trade_count) == before
+    assert set(engine.tokens) == {sim.mint}
+
+
+def test_text_fields_are_sanitised():
+    engine, _ = make_engine()
+    engine.handle({"txType": "create", "mint": "m1", "name": None, "symbol": 5,
+                   "traderPublicKey": None, "uri": "javascript:alert(1)", "solAmount": 0})
+    t = engine.tokens["m1"]
+    assert (t.name, t.symbol, t.creator, t.uri) == ("", "", "", "")
+    engine.handle({"txType": "create", "mint": "m2", "uri": "https://ipfs.io/x", "solAmount": 0})
+    assert engine.tokens["m2"].uri == "https://ipfs.io/x"

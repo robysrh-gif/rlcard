@@ -23,17 +23,26 @@ def create_app(engine: Engine, feed, alerts: AlertDispatcher, fetch_sol_price: b
             if q.qsize() < 50:  # drop events for clients that stopped reading
                 q.put_nowait(data)
 
+    sending: set[asyncio.Task] = set()
+
     async def tick_loop():
         while True:
             await asyncio.sleep(engine.config.snapshot_interval_s)
-            new_alerts, pruned = engine.tick()
-            if pruned:
-                await feed.unsubscribe(pruned)
-            for a in new_alerts:
-                broadcast({"type": "alert", "alert": a})
-                asyncio.create_task(alerts.send(a))
-            if clients:
-                broadcast({"type": "snapshot", "stats": engine.stats(), "tokens": engine.ranked(100)})
+            try:
+                new_alerts, pruned = engine.tick()
+                if pruned:
+                    await feed.unsubscribe(pruned)
+                for a in new_alerts:
+                    broadcast({"type": "alert", "alert": a})
+                    task = asyncio.create_task(alerts.send(a))
+                    sending.add(task)
+                    task.add_done_callback(sending.discard)
+                if clients:
+                    broadcast({"type": "snapshot", "stats": engine.stats(), "tokens": engine.ranked(100)})
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                log.exception("tick failed")
 
     async def sol_price_loop():
         url = "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd"
@@ -52,9 +61,10 @@ def create_app(engine: Engine, feed, alerts: AlertDispatcher, fetch_sol_price: b
             app["tasks"].append(asyncio.create_task(sol_price_loop()))
 
     async def on_cleanup(app):
-        for t in app["tasks"]:
+        tasks = app["tasks"] + list(sending)
+        for t in tasks:
             t.cancel()
-        await asyncio.gather(*app["tasks"], return_exceptions=True)
+        await asyncio.gather(*tasks, return_exceptions=True)
         await alerts.close()
 
     # ---- routes ----
@@ -63,7 +73,10 @@ def create_app(engine: Engine, feed, alerts: AlertDispatcher, fetch_sol_price: b
         return web.FileResponse(STATIC / "index.html")
 
     async def tokens(request):
-        limit = min(int(request.query.get("limit", 100)), 500)
+        try:
+            limit = max(1, min(int(request.query.get("limit", 100)), 500))
+        except ValueError:
+            raise web.HTTPBadRequest(text="limit must be an integer")
         return web.json_response({"stats": engine.stats(),
                                   "tokens": engine.ranked(limit, request.query.get("sort", "score"))})
 

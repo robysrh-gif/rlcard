@@ -15,6 +15,10 @@ PUMPPORTAL_URL = "wss://pumpportal.fun/api/data"
 SUBSCRIBE_BATCH = 100
 
 
+def _reject_constant(name: str):
+    raise ValueError(f"non-finite number {name}")
+
+
 class PumpPortalFeed:
     """Live feed from PumpPortal's free data websocket.
 
@@ -45,7 +49,7 @@ class PumpPortalFeed:
                     await self._send("subscribeTokenTrade", list(self.engine.tokens))
                     async for raw in ws:
                         try:
-                            msg = json.loads(raw)
+                            msg = json.loads(raw, parse_constant=_reject_constant)
                         except ValueError:
                             continue
                         mint = self.engine.handle(msg)

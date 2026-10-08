@@ -28,11 +28,14 @@ class AlertDispatcher:
             self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
         try:
             if self.discord_webhook:
-                await self.session.post(self.discord_webhook, json={"content": text})
+                async with self.session.post(self.discord_webhook, json={"content": text}) as r:
+                    r.raise_for_status()
             if self.telegram:
                 token, chat = self.telegram
-                await self.session.post(f"https://api.telegram.org/bot{token}/sendMessage",
-                                        json={"chat_id": chat, "text": text, "disable_web_page_preview": True})
+                async with self.session.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                                             json={"chat_id": chat, "text": text,
+                                                   "disable_web_page_preview": True}) as r:
+                    r.raise_for_status()
         except Exception as e:
             log.warning("alert delivery failed: %s", e)
 

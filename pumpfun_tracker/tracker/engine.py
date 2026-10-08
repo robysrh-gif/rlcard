@@ -1,4 +1,6 @@
 """Turns raw feed messages into token state, scores, and alerts."""
+import logging
+import math
 import time
 from collections import deque
 from typing import Callable, Optional
@@ -6,6 +8,42 @@ from typing import Callable, Optional
 from .config import Config
 from .models import TokenState, Trade
 from .scoring import score_token
+
+log = logging.getLogger(__name__)
+
+
+def _num(msg: dict, key: str, optional: bool = False) -> Optional[float]:
+    v = msg.get(key)
+    if v is None:
+        if optional:
+            return None
+        v = 0
+    if isinstance(v, bool) or not isinstance(v, (int, float, str)):
+        raise ValueError(f"{key} is not a number")
+    v = float(v)
+    if not math.isfinite(v) or v < 0:
+        raise ValueError(f"{key} is not a finite non-negative number")
+    return v
+
+
+def _numbers(msg: dict) -> dict:
+    """Parse every numeric field up front so a bad message can't half-apply."""
+    return {
+        "sol": _num(msg, "solAmount"),
+        "tokens": _num(msg, "tokenAmount", True) or _num(msg, "initialBuy"),
+        "v_tokens": _num(msg, "vTokensInBondingCurve", True),
+        "v_sol": _num(msg, "vSolInBondingCurve", True),
+        "mcap": _num(msg, "marketCapSol", True),
+    }
+
+
+def _text(v, limit: int) -> str:
+    return v[:limit] if isinstance(v, str) else ""
+
+
+def _safe_uri(v) -> str:
+    uri = _text(v, 300)
+    return uri if uri.startswith(("https://", "ipfs://")) else ""
 
 
 class Engine:
@@ -21,71 +59,78 @@ class Engine:
 
     # ---- ingestion -----------------------------------------------------
 
-    def handle(self, msg: dict) -> Optional[str]:
-        """Process one PumpPortal message. Returns a mint to subscribe to, if any."""
+    def handle(self, msg) -> Optional[str]:
+        """Process one PumpPortal message. Returns a mint to subscribe to, if any.
+
+        Malformed messages are dropped without touching any state.
+        """
+        if not isinstance(msg, dict) or not isinstance(msg.get("mint"), str) or not msg["mint"]:
+            return None
         tx = msg.get("txType")
-        if tx == "create":
-            return self._on_create(msg)
-        if tx in ("buy", "sell"):
-            self._on_trade(msg)
-        elif tx == "migrate":
-            token = self.tokens.get(msg.get("mint", ""))
-            if token:
-                token.migrated = True
+        try:
+            if tx == "create":
+                return self._on_create(msg)
+            if tx in ("buy", "sell"):
+                self._on_trade(msg)
+            elif tx == "migrate":
+                token = self.tokens.get(msg["mint"])
+                if token:
+                    token.migrated = True
+        except ValueError as e:
+            log.debug("dropping malformed %s message: %s", tx, e)
         return None
 
     def _on_create(self, msg: dict) -> Optional[str]:
-        mint = msg.get("mint")
-        if not mint or mint in self.tokens:
+        mint = msg["mint"]
+        if mint in self.tokens:
             return None
+        nums = _numbers(msg)  # validate before creating anything
         now = self.clock()
         token = TokenState(
             mint=mint,
-            name=str(msg.get("name", ""))[:64],
-            symbol=str(msg.get("symbol", ""))[:16],
-            creator=msg.get("traderPublicKey", ""),
+            name=_text(msg.get("name"), 64),
+            symbol=_text(msg.get("symbol"), 16),
+            creator=_text(msg.get("traderPublicKey"), 64),
             created_at=now,
-            uri=msg.get("uri", ""),
+            uri=_safe_uri(msg.get("uri")),
         )
         self.tokens[mint] = token
         self.created_total += 1
         # The create transaction usually bundles the dev's initial buy.
-        if float(msg.get("solAmount") or 0) > 0:
-            self._apply_trade(token, msg, is_buy=True, now=now)
+        if nums["sol"] > 0:
+            self._apply_trade(token, msg, nums, is_buy=True, now=now)
         else:
-            self._apply_curve(token, msg)
+            self._apply_curve(token, nums)
             token.peak_mcap_sol = token.mcap_sol
         return mint
 
     def _on_trade(self, msg: dict) -> None:
-        token = self.tokens.get(msg.get("mint", ""))
+        token = self.tokens.get(msg["mint"])
         if token:
-            self._apply_trade(token, msg, is_buy=msg["txType"] == "buy", now=self.clock())
+            self._apply_trade(token, msg, _numbers(msg), is_buy=msg["txType"] == "buy", now=self.clock())
 
-    def _apply_curve(self, token: TokenState, msg: dict) -> None:
-        if msg.get("vTokensInBondingCurve") is not None:
-            token.v_tokens = float(msg["vTokensInBondingCurve"])
-        if msg.get("vSolInBondingCurve") is not None:
-            token.v_sol = float(msg["vSolInBondingCurve"])
-        if msg.get("marketCapSol") is not None:
-            token.mcap_sol = float(msg["marketCapSol"])
+    @staticmethod
+    def _apply_curve(token: TokenState, nums: dict) -> None:
+        if nums["v_tokens"] is not None:
+            token.v_tokens = nums["v_tokens"]
+        if nums["v_sol"] is not None:
+            token.v_sol = nums["v_sol"]
+        if nums["mcap"] is not None:
+            token.mcap_sol = nums["mcap"]
 
-    def _apply_trade(self, token: TokenState, msg: dict, is_buy: bool, now: float) -> None:
-        self._apply_curve(token, msg)
-        trader = msg.get("traderPublicKey", "")
+    def _apply_trade(self, token: TokenState, msg: dict, nums: dict, is_buy: bool, now: float) -> None:
+        self._apply_curve(token, nums)
         token.add_trade(
             Trade(
                 ts=now,
-                trader=trader,
+                trader=_text(msg.get("traderPublicKey"), 64),
                 is_buy=is_buy,
-                sol=float(msg.get("solAmount") or 0),
-                tokens=float(msg.get("tokenAmount") or msg.get("initialBuy") or 0),
+                sol=nums["sol"],
+                tokens=nums["tokens"],
                 mcap_sol=token.mcap_sol,
             ),
             self.config.history_s,
         )
-        if msg.get("newTokenBalance") is not None:
-            token.balances[trader] = float(msg["newTokenBalance"])
         self.trade_times.append(now)
 
     # ---- periodic work -------------------------------------------------
@@ -139,8 +184,9 @@ class Engine:
         ]
         overflow = len(self.tokens) - len(dead) - cfg.max_tokens
         if overflow > 0:
+            dead_set = set(dead)
             alive = sorted(
-                (t for m, t in self.tokens.items() if m not in set(dead)),
+                (t for m, t in self.tokens.items() if m not in dead_set),
                 key=lambda t: (t.score, t.last_trade_at),
             )
             dead += [t.mint for t in alive[:overflow]]
