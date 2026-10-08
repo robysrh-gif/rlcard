@@ -64,6 +64,7 @@ class Position:
     pending_exit: Optional[list] = None   # [reason, trigger_ts] while the sell is landing
     graduated: bool = False
     stale_from_minute: Optional[int] = None  # first minute mark taken with no trades for 2+ min
+    # After graduation, remaining minute marks repeat the sold-at-graduation return.
 
 
 class PaperTrader:
@@ -134,8 +135,14 @@ class PaperTrader:
                 # Trading moves off pump.fun and our feed loses the price. Close the
                 # position pessimistically and stop taking minute marks.
                 p.graduated = True
+                grad_mcap = token.mcap_sol * (1 - c.graduation_haircut)
                 if p.exit_ts is None:
-                    self._exit(p, now, token.mcap_sol * (1 - c.graduation_haircut), "graduated", token.v_sol)
+                    self._exit(p, now, grad_mcap, "graduated", token.v_sol)
+                # Fill the remaining minutes with "sold at graduation" rather than dropping
+                # them, otherwise the later minutes would average only the coins that failed.
+                grad_ret = round(self.net_return(p.entry_mcap, grad_mcap, token.v_sol)[0], 4)
+                for h in c.horizons:
+                    p.marks.setdefault(str(h), grad_ret)
                 self._finish(p, now, None)
                 continue
             if not feed_ok:

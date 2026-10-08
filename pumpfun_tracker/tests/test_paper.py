@@ -61,6 +61,7 @@ def test_graduation_closes_with_haircut(tmp_path):
     rec = paper.closed[-1]
     assert rec["exit_reason"] == "graduated" and rec["graduated"]
     assert rec["exit_mcap"] < engine.tokens[sim.mint].mcap_sol
+    assert len(rec["marks"]) == 60 and set(rec["marks"].values()) == {round(rec["ret"], 4)}
 
 
 def test_entry_is_delayed_and_minutes_are_marked(tmp_path):

@@ -57,7 +57,8 @@ bar chart of the average return if you had sold at minute 1, 2, … 60.
 
 **Minute-by-minute check.** Separately from the rules, each trade's net return
 is recorded at every minute from 1 to 60. That shows which holding time would
-have worked best. Marks stop at graduation.
+have worked best. After a graduation, the remaining minutes use the
+sold-at-graduation return, so winners don't silently drop out of later minutes.
 
 **Costs (deliberately pessimistic).**
 

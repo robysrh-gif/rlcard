@@ -42,8 +42,8 @@ def main(path: str = "paper_trades.jsonl") -> None:
         print(f"  {m:>3}   {pct(v['avg_ret']):>9}   {v['win_rate'] * 100:>6.0f}%  {v['n']:>4}  "
               f"{'+' if v['avg_ret'] >= 0 else '-'}{bar}{mark}")
     if s["graduated"]:
-        print(f"\n{s['graduated']} trades graduated off pump.fun, where the feed loses the price. Minute marks stop "
-              "there, so later minutes average fewer trades (see n).")
+        print(f"\n{s['graduated']} trades graduated off pump.fun, where the feed loses the price. For those, every "
+              "minute after graduation uses the sold-at-graduation return (last price minus the haircut).")
     print("\nBy alert score:")
     for b in s["by_score"]:
         print(f"  {b['range']:>7}: n={b['n']:<4} win rate {b['win_rate'] * 100:.0f}%  avg {pct(b['avg_ret'])}")
