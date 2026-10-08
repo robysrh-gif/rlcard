@@ -10,7 +10,7 @@ def format_alert(a: dict) -> str:
     flags = f" [{', '.join(a['flags'])}]" if a["flags"] else ""
     return (f"🚀 ${a['symbol']} ({a['name']}) score {a['score']:.0f} | "
             f"mcap {a['mcap_sol']:.1f} SOL | +{a['change_5m'] * 100:.0f}% 5m | "
-            f"{a['buyers_5m']} buyers{flags}\nhttps://pump.fun/coin/{a['mint']}")
+            f"{a['buyers_5m']} buyers{flags}\nhttps://gmgn.ai/sol/token/{a['mint']}\n{a['mint']}")
 
 
 class AlertDispatcher:

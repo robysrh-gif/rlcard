@@ -28,7 +28,7 @@ async def with_fake_services(fn, status=201, body=None):
 
     async def ntfy(request):
         received.append({"kind": "ntfy", "topic": request.match_info["topic"], "body": await request.text(),
-                         **{h: request.headers.get(h) for h in ("Title", "Priority", "Click")}})
+                         **{h: request.headers.get(h) for h in ("Title", "Priority", "Click", "Actions")}})
         return web.json_response({}, status=200 if status < 300 else status)
 
     app = web.Application()
@@ -52,7 +52,8 @@ def test_validation():
 
 def test_formats_are_ascii_and_safe():
     text = format_sms(alert(symbol="P🐸PE<x>", flags=["near_graduation"]))
-    assert text.isascii() and "$PPEx score 90" in text and "pump.fun/coin/Mint" in text
+    assert text.isascii() and "$PPEx score 90" in text and "https://gmgn.ai/sol/token/Mint" in text
+    assert text.splitlines()[-1] == "Mint1111111111111111111111111111111111pump"  # address alone, easy to copy
     assert len(text) <= 320  # at most two SMS segments
     assert format_speech(alert(symbol="<b>")) .startswith("Rocket Radar alert. b is skyrocketing")
 
@@ -69,7 +70,9 @@ def test_all_channels_deliver():
     received = asyncio.run(with_fake_services(go))
     push, sms, call = received
     assert push["kind"] == "ntfy" and push["topic"] == "rocketradar-test1234" and push["Priority"] == "5"
-    assert push["Click"].endswith("/coin/Mint1111111111111111111111111111111111pump")
+    assert push["Click"] == "https://gmgn.ai/sol/token/Mint1111111111111111111111111111111111pump"
+    assert "view, GMGN, https://gmgn.ai/sol/token/Mint" in push["Actions"] and "pump.fun/coin/Mint" in push["Actions"]
+    assert "\nMint1111111111111111111111111111111111pump" in push["body"]
     assert sms["kind"] == "Messages" and sms["To"] == "+15551111111" and sms["auth"] == f"{SID}:{TOKEN}"
     assert call["kind"] == "Calls" and "<Say" in call["Twiml"] and "P E P E is skyrocketing" in call["Twiml"]
 

@@ -37,6 +37,10 @@ def valid_topic(t: str) -> bool:
     return bool(TOPIC.match(t or ""))
 
 
+def gmgn_url(mint: str) -> str:
+    return f"https://gmgn.ai/sol/token/{mint}"
+
+
 def _ascii_symbol(alert: dict) -> str:
     return re.sub(r"[^A-Za-z0-9]", "", alert["symbol"])[:12] or "UNKNOWN"
 
@@ -48,7 +52,9 @@ def format_sms(alert: dict, suppressed: int = 0) -> str:
             f"mcap {alert['mcap_sol']:.0f} SOL, {alert['buyers_5m']} buyers")
     if alert.get("flags"):
         text += f" [{','.join(alert['flags'])}]"
-    text += f"\npump.fun/coin/{alert['mint']}"
+    # Trade-ready: a one-tap GMGN link, then the coin address alone on its own
+    # line so it's easy to long-press, copy and paste into a trading bot.
+    text += f"\n{gmgn_url(alert['mint'])}\n{alert['mint']}"
     if suppressed:
         text += f"\n(+{suppressed} more alerts not sent: hourly limit)"
     return text
@@ -110,10 +116,12 @@ class NtfyChannel(_Http):
         self.server = server.rstrip("/")
         self.label = f"phone alarm (ntfy topic {topic})"
 
-    async def _post(self, title: str, body: str, click: str = "") -> tuple:
+    async def _post(self, title: str, body: str, click: str = "", actions: str = "") -> tuple:
         headers = {"Title": title, "Priority": "5", "Tags": "rotating_light,rocket"}
         if click:
             headers["Click"] = click
+        if actions:
+            headers["Actions"] = actions
         try:
             async with self.http().post(f"{self.server}/{self.topic}", data=body.encode(), headers=headers) as r:
                 return (r.status < 300, None if r.status < 300 else f"HTTP {r.status}")
@@ -122,7 +130,9 @@ class NtfyChannel(_Http):
 
     async def send(self, alert: dict, suppressed: int) -> list:
         ok, err = await self._post(f"ROCKET ${_ascii_symbol(alert)} score {alert['score']:.0f}",
-                                   format_sms(alert, suppressed), f"https://pump.fun/coin/{alert['mint']}")
+                                   format_sms(alert, suppressed), gmgn_url(alert["mint"]),
+                                   f"view, GMGN, {gmgn_url(alert['mint'])}; "
+                                   f"view, pump.fun, https://pump.fun/coin/{alert['mint']}")
         if not ok:
             log.warning("ntfy alert failed: %s", err)
         return [(self.label, ok, err)]
