@@ -59,6 +59,7 @@ class Engine:
         self.created_total = 0
         self.sol_usd: Optional[float] = None
         self.feed_status = "starting"
+        self.phone_info: Optional[dict] = None  # shown on the dashboard (e.g. ntfy topic to subscribe to)
         self.pinned: set[str] = set()  # mints that must not be pruned (e.g. open paper positions)
 
     # ---- ingestion -----------------------------------------------------
@@ -221,4 +222,5 @@ class Engine:
             "sol_usd": self.sol_usd,
             "feed": self.feed_status,
             "alert_score": self.config.alert_score,
+            "phone": self.phone_info,
         }

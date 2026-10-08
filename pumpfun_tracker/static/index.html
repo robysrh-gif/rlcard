@@ -90,6 +90,7 @@ svg { display: block; width: 100%; }
     <div class="stat"><b id="s-rockets">–</b><span>rockets now</span></div>
     <div class="stat"><b id="s-sol">–</b><span>SOL / USD</span></div>
   </div>
+  <div class="stat" id="phone" style="display:none;flex-basis:100%;color:var(--muted);font-size:12px"></div>
   <button id="theme" title="Toggle theme">◐</button>
 </header>
 <main>
@@ -173,6 +174,12 @@ function renderStats() {
   $("s-tpm").textContent = s.trades_per_min ?? "–";
   $("s-rockets").textContent = s.rockets ?? "–";
   $("s-sol").textContent = s.sol_usd ? "$" + s.sol_usd.toFixed(2) : "–";
+  const ph = s.phone;
+  $("phone").style.display = ph && ph.summary ? "" : "none";
+  if (ph && ph.summary) {
+    $("phone").innerHTML = "📱 Phone alerts on: " + esc(ph.summary) + (ph.ntfy_topic
+      ? ` · not getting them? Install the free <b>ntfy</b> app and subscribe to <b style="user-select:all">${esc(ph.ntfy_topic)}</b>` : "");
+  }
 }
 
 function renderRows() {

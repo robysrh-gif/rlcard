@@ -1,0 +1,61 @@
+name: Rocket Radar app
+
+# Tests the pump.fun tracker and builds a double-click app for Windows, macOS and Linux.
+# Download the builds from the run's "Artifacts" section.
+on:
+  push:
+    paths:
+      - "pumpfun_tracker/**"
+      - ".github/workflows/rocket-radar.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pumpfun_tracker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q tests
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: RocketRadar-Windows
+          - os: macos-latest
+            name: RocketRadar-macOS-AppleSilicon
+          - os: macos-13
+            name: RocketRadar-macOS-Intel
+          - os: ubuntu-latest
+            name: RocketRadar-Linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: pumpfun_tracker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pyinstaller
+      - run: python build.py
+      - name: Smoke test the built app
+        run: ./dist/RocketRadar --help
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: pumpfun_tracker/dist/
+          retention-days: 30

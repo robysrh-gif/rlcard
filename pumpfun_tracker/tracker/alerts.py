@@ -14,7 +14,9 @@ def format_alert(a: dict) -> str:
 
 
 class AlertDispatcher:
-    def __init__(self, discord_webhook: str = None, telegram_token: str = None, telegram_chat: str = None):
+    def __init__(self, discord_webhook: str = None, telegram_token: str = None, telegram_chat: str = None,
+                 phone=None):
+        self.phone = phone  # optional tracker.phone.PhoneAlerts
         self.discord_webhook = discord_webhook
         self.telegram = (telegram_token, telegram_chat) if telegram_token and telegram_chat else None
         self.session = None
@@ -22,6 +24,8 @@ class AlertDispatcher:
     async def send(self, alert: dict) -> None:
         text = format_alert(alert)
         log.info(text.replace("\n", " "))
+        if self.phone:
+            await self.phone.send_alert(alert)
         if not (self.discord_webhook or self.telegram):
             return
         if self.session is None:
@@ -40,5 +44,7 @@ class AlertDispatcher:
             log.warning("alert delivery failed: %s", e)
 
     async def close(self) -> None:
+        if self.phone:
+            await self.phone.close()
         if self.session:
             await self.session.close()

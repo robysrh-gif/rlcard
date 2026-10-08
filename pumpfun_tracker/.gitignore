@@ -1,1 +1,3 @@
 paper_trades*.jsonl
+build/
+dist/

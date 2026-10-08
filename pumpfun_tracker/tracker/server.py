@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import sys
 from pathlib import Path
 
 from aiohttp import ClientSession, ClientTimeout, web
@@ -10,7 +11,8 @@ from .alerts import AlertDispatcher
 from .engine import Engine
 
 log = logging.getLogger(__name__)
-STATIC = Path(__file__).resolve().parent.parent / "static"
+# In a PyInstaller build, bundled files are unpacked under sys._MEIPASS.
+STATIC = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent)) / "static"
 
 
 def create_app(engine: Engine, feed, alerts: AlertDispatcher, fetch_sol_price: bool = True,

@@ -7,7 +7,63 @@ notification, Discord, Telegram) when one starts skyrocketing.
 > Signals only, not financial advice. Most pump.fun tokens go to zero. A high
 > score means "lots of broad buying right now", not "safe" or "will keep going".
 
-## Quick start
+## Standalone app with phone alerts (easiest)
+
+Download a ready-made app with nothing to install. Open the repository's
+**Actions** tab, then the latest **Rocket Radar app** run. Under **Artifacts**,
+download the one for your computer:
+
+| Your computer | Download | How to open it |
+|---|---|---|
+| Windows | `RocketRadar-Windows` | Unzip and double-click `RocketRadar.exe`. If SmartScreen warns you, click "More info", then "Run anyway". |
+| Mac (M1/M2/M3/M4) | `RocketRadar-macOS-AppleSilicon` | Unzip, right-click `RocketRadar`, choose Open, then Open again. The app is unsigned. |
+| Mac (Intel) | `RocketRadar-macOS-Intel` | Same as above. |
+| Linux | `RocketRadar-Linux` | `chmod +x RocketRadar && ./RocketRadar` |
+
+The first launch asks no questions. It turns on **phone alarm alerts**, sends
+them to a private random topic, and opens the dashboard. Then do this once:
+
+1. Install the free **ntfy** app from the App Store or Google Play.
+2. Tap **+** and subscribe to the topic printed in the app window. The topic is
+   also shown at the top of the dashboard.
+3. Run `RocketRadar --test-alert` to check that alerts reach your phone.
+
+From then on, every alert scoring 80 or more reaches your phone as an urgent,
+loud notification. You get at most 6 an hour, and each one links straight to
+the coin on pump.fun. The free ntfy option needs no account and costs nothing.
+
+**SMS texts or phone calls instead of (or as well as) the alarm.** Run
+`RocketRadar --setup`. Both use Twilio: about $0.01 per text and $0.02 per
+call. The setup asks for your Twilio details and number, then sends a test.
+The call reads the alert aloud. Save the Twilio number as a contact with
+**Emergency Bypass** (iPhone) or as a starred contact allowed through Do Not
+Disturb (Android), and it rings even when your phone is on silent.
+
+> Real Amber Alerts (Wireless Emergency Alerts) are government-only. An urgent
+> ntfy push plus an emergency-bypass phone call is as close as an app can get.
+
+| Command | What it does |
+|---|---|
+| `RocketRadar` | Run on live pump.fun data |
+| `RocketRadar --setup` | Choose phone alarm / SMS / calls, minimum score, alerts per hour |
+| `RocketRadar --test-alert` | Send a test alert to your phone |
+| `RocketRadar --report` | Paper-trading report |
+| `RocketRadar --simulate` | Run on simulated data (no phone alerts) |
+
+Settings and paper-trading results are kept in one folder:
+- **Windows:** `%APPDATA%\RocketRadar`
+- **Mac:** `~/Library/Application Support/RocketRadar`
+- **Linux:** `~/.config/RocketRadar`
+
+On a server, you can configure it with environment variables instead:
+`NTFY_TOPIC`, `NTFY_SERVER`, `SMS_ENABLED=1`, `CALL_ENABLED=1`,
+`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`,
+`PHONE_TO=+1555...,+1555...`, `ALERT_MIN_SCORE` and `ALERT_MAX_PER_HOUR`.
+
+To build the app yourself, run `pip install pyinstaller && python build.py`.
+It builds for the computer you run it on only.
+
+## Quick start (from source)
 
 ```bash
 cd pumpfun_tracker
@@ -115,6 +171,8 @@ For example, `--take-profit 0.5 --stop-loss 0.2` tests tighter exits.
 | `tracker/alerts.py` | Alert formatting and delivery. |
 | `tracker/paper.py` | Paper trading: simulated fills with costs, exit rules, per-minute marks, JSONL log, stats. |
 | `tracker/report.py` | Command-line paper-trading report (`--watch` refreshes every minute). |
+| `tracker/phone.py` | Phone alerts: urgent ntfy push, Twilio SMS and voice calls, min-score and hourly cap. |
+| `app.py` / `build.py` | Standalone app entry point (setup, test alert) and the PyInstaller build script. |
 | `tracker/server.py` | HTTP API, SSE broadcast, background loops (tick, SOL/USD price). |
 | `static/index.html` | Single-file dashboard: live table, filters, token detail with chart, alert feed. |
 
