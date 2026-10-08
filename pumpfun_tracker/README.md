@@ -29,6 +29,67 @@ Tuning flags: `--alert-score 70 --min-change 0.5 --min-buyers 10 --max-tokens 15
 The server binds to `127.0.0.1` by default and has no authentication. Put it
 behind a reverse proxy with auth before using `--host 0.0.0.0`.
 
+## Paper trading: test it before you bet
+
+Paper trading is **on by default**. Every alert opens a simulated 0.1 SOL
+position, and nothing is actually bought. Results add up in
+`paper_trades.jsonl` across restarts. Simulated-feed runs write to
+`paper_trades.simulated.jsonl` instead.
+
+```bash
+python -m tracker.report            # summary of all finished paper trades
+python -m tracker.report --watch    # refresh the report every minute
+```
+
+The dashboard's **Paper trading** panel shows the same numbers live, with a
+bar chart of the average return if you had sold at minute 1, 2, … 60.
+
+**Strategy rules for each paper trade.**
+- **Buy:** the buy lands 5 s after the alert, at the *highest* price seen in that window.
+- **Sell rules:**
+  - take profit at +100% net
+  - stop loss at −30% net
+  - sell if the creator sells after you bought
+  - sell after 60 min at the latest
+- **Sell timing:** every sell lands 2 s after its trigger, at the *lowest* price in that window.
+- **Graduation:** if the coin graduates, pump.fun no longer shows its price. The trade is closed at the last price minus 30%.
+- **Feed outage:** while the data feed is down, no buys, sells or minute marks happen.
+
+**Minute-by-minute check.** Separately from the rules, each trade's net return
+is recorded at every minute from 1 to 60. That shows which holding time would
+have worked best. Marks stop at graduation.
+
+**Costs (deliberately pessimistic).**
+
+| Cost | Default |
+|---|---|
+| pump.fun fee per side | 1.25% |
+| Bot fee per side | 1% |
+| Slippage per fill | 3% |
+| Your own price impact | from the curve's SOL reserve |
+| Network fees | 0.005 SOL per transaction |
+
+A coin that goes nowhere loses about **16.5%** on a 0.1 SOL round trip. A 2×
+nets only about **+72%**. Larger stakes dilute the fixed network fee, but your
+price impact grows.
+
+All of it can be tuned:
+`--stake --take-profit --stop-loss --entry-delay --slippage --no-paper`.
+For example, `--take-profit 0.5 --stop-loss 0.2` tests tighter exits.
+
+**How to read the results.**
+- Wait for **at least 50–100 finished trades**, which is a day or more of live data.
+- "Best minute" and "avg peak" are hindsight. Picking the best of 60 minutes
+  after the fact overstates what you'd get. Choose rules on one period's data
+  and confirm them on a later period before trusting them.
+- If the median trade loses money, the alerts don't work at these costs,
+  whatever the average says.
+- Open positions aren't saved, so a restart drops trades still in progress.
+- Unverified: whether PumpPortal's free stream keeps sending prices after a
+  coin graduates to PumpSwap. The tracker assumes it doesn't.
+- The simulated feed only shows that the plumbing works. Its profit numbers
+  mean nothing.
+
 ## Architecture
 
 ```
@@ -51,6 +112,8 @@ behind a reverse proxy with auth before using `--host 0.0.0.0`.
 | `tracker/models.py` | `TokenState` (curve reserves, rolling trade window, peak, dev-sold flag) and curve constants. |
 | `tracker/scoring.py` | Momentum score and risk flags. |
 | `tracker/alerts.py` | Alert formatting and delivery. |
+| `tracker/paper.py` | Paper trading: simulated fills with costs, exit rules, per-minute marks, JSONL log, stats. |
+| `tracker/report.py` | Command-line paper-trading report (`--watch` refreshes every minute). |
 | `tracker/server.py` | HTTP API, SSE broadcast, background loops (tick, SOL/USD price). |
 | `static/index.html` | Single-file dashboard: live table, filters, token detail with chart, alert feed. |
 

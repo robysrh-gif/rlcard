@@ -88,10 +88,12 @@ _WORDS = ["PEPE", "DOGE", "CAT", "MOON", "FROG", "BONK", "WIF", "CHAD", "GIGA", 
 
 # archetype: (weight, buy rate/s, sell rate/s, unique-wallet pool, avg buy SOL, lifetime s)
 ARCHETYPES = {
-    "dud":    (0.70, 0.08, 0.06, 15, 0.3, 90),
+    "dud":    (0.73, 0.08, 0.06, 15, 0.3, 90),
     "rug":    (0.12, 0.60, 0.15, 40, 0.6, 120),
     "whale":  (0.08, 0.30, 0.10, 3, 3.0, 120),
-    "rocket": (0.10, 1.50, 0.35, 400, 0.9, 420),
+    "rocket": (0.03, 1.50, 0.35, 400, 0.45, 1500),
+    # Looks exactly like a rocket at first, then the crowd dumps. The common real-world outcome.
+    "fakeout": (0.07, 1.50, 0.35, 300, 0.45, 900),
 }
 
 
@@ -115,6 +117,9 @@ class _SimToken:
         self.v_tokens = float(INITIAL_VIRTUAL_TOKENS)
         self.age = 0.0
         self.migrated = False
+        # Rockets run for a while, then holders take profit and the price bleeds out,
+        # which is what most real runners do.
+        self.peak_at = random.uniform(60, 400) if kind == "rocket" else random.uniform(50, 150)
 
     @property
     def mcap(self) -> float:
@@ -166,9 +171,15 @@ class _SimToken:
         if self.age > self.lifetime or self.migrated:
             return []
         out = []
-        ramp = 1.0
-        if self.kind == "rocket":
-            ramp = 0.3 + min(self.age / 120, 2.0)  # demand keeps building
+        ramp, sell_ramp = 1.0, 1.0
+        if self.kind in ("rocket", "fakeout"):
+            if self.age < self.peak_at:
+                ramp = 0.3 + min(self.age / 120, 2.0)  # demand keeps building
+            else:
+                decay = 90 if self.kind == "rocket" else 25
+                fade = math.exp(-(self.age - self.peak_at) / decay)
+                ramp = (0.3 + min(self.peak_at / 120, 2.0)) * fade
+                sell_ramp = 1 + (5 if self.kind == "rocket" else 15) * (1 - fade)  # profit-taking takes over
         elif self.kind == "rug" and self.age > 45 and self.creator in self.holdings:
             m = self.sell(self.creator, 1.0)
             self.holdings.pop(self.creator, None)
@@ -176,10 +187,11 @@ class _SimToken:
             return [m] if m else []
         for _ in range(_poisson(self.buy_rate * ramp * dt)):
             out.append(self.buy(random.choice(self.wallets), random.expovariate(1 / self.avg_buy)))
-        for _ in range(_poisson(self.sell_rate * dt)):
+        for _ in range(_poisson(self.sell_rate * sell_ramp * dt)):
             holders = [w for w, h in self.holdings.items() if h > 0 and w != self.creator]
             if holders:
-                m = self.sell(random.choice(holders), random.choice([0.25, 0.5, 1.0]))
+                frac = 1.0 if self.kind == "fakeout" and self.age >= self.peak_at else random.choice([0.25, 0.5, 1.0])
+                m = self.sell(random.choice(holders), frac)
                 if m:
                     out.append(m)
         if self.v_tokens <= INITIAL_VIRTUAL_TOKENS - 793_100_000:

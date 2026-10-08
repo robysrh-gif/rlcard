@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Rocket Radar</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
 <style>
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --text: #14171c; --muted: #667085; --line: #e4e7ec;
@@ -73,7 +74,8 @@ aside { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .detail a { color: var(--accent); }
 .empty { color: var(--muted); padding: 24px 12px; text-align: center; }
 .trades { font-size: 12px; margin-top: 10px; max-height: 180px; overflow-y: auto; }
-.trades div { display: flex; justify-content: space-between; padding: 2px 0; font-family: ui-monospace, monospace; }
+.trades div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; font-family: ui-monospace, monospace; }
+.trades div span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .disclaimer { color: var(--muted); font-size: 12px; padding: 0 20px 16px; }
 svg { display: block; width: 100%; }
 </style>
@@ -119,6 +121,10 @@ svg { display: block; width: 100%; }
     <section class="panel sect">
       <h2>Token detail</h2>
       <div id="detail" class="detail"><div class="empty">Click a row to inspect a token.</div></div>
+    </section>
+    <section class="panel sect">
+      <h2>Paper trading <span id="paper-cfg" style="font-weight:400;color:var(--muted)"></span></h2>
+      <div id="paper" class="detail"><div class="empty">Paper trading is off. Start without --no-paper to enable it.</div></div>
     </section>
     <section class="panel sect">
       <h2>Skyrocket alerts <label class="chk" style="font-weight:400"><input id="notify" type="checkbox"> Notify</label></h2>
@@ -277,17 +283,56 @@ function addAlerts(list, fresh) {
 }
 $("notify").onchange = (e) => { if (e.target.checked && "Notification" in window) Notification.requestPermission(); };
 
+function minuteChart(hold, best) {
+  const mins = Object.keys(hold).map(Number).sort((a, b) => a - b);
+  if (!mins.length) return "";
+  const vals = mins.map((h) => hold[h].avg_ret);
+  const W = 300, H = 70, mid = H / 2, max = Math.max(0.05, ...vals.map(Math.abs));
+  const bw = W / 60;
+  const bars = mins.map((h, i) => {
+    const v = vals[i], m = h / 60, hgt = Math.abs(v) / max * (mid - 2);
+    const y = v >= 0 ? mid - hgt : mid;
+    const fill = m === best ? "var(--accent)" : v >= 0 ? "var(--up)" : "var(--down)";
+    return `<rect x="${((m - 1) * bw).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw - 1).toFixed(1)}" height="${Math.max(hgt, 0.5).toFixed(1)}" fill="${fill}"><title>min ${m}: ${pct(v)} avg</title></rect>`;
+  }).join("");
+  return `<div style="font-size:12px;color:var(--muted);margin-top:10px">Avg return if sold at minute 1…60</div>
+    <svg viewBox="0 0 ${W} ${H}" style="height:${H}px"><line x1="0" x2="${W}" y1="${mid}" y2="${mid}" stroke="var(--line)"/>${bars}</svg>`;
+}
+
+function renderPaper(p) {
+  if (!p) return;
+  const s = p.summary, cfg = p.settings;
+  $("paper-cfg").textContent = `${cfg.stake_sol} SOL · TP +${cfg.take_profit * 100}% · SL -${cfg.stop_loss * 100}%`;
+  const row = (x) => `<div><span class="${x.ret > 0 ? "up" : x.ret < 0 ? "down" : ""}">${x.ret == null ? "…" : pct(x.ret)}</span>
+    <span>$${esc(x.symbol)}</span><span>${esc(x.status)}</span></div>`;
+  const best = s.best_minute;
+  $("paper").innerHTML = s.trades ? `
+    <div class="kv" style="margin-top:0">
+      <div><span>Finished trades</span><br>${s.trades}</div>
+      <div><span>Win rate</span><br>${(s.win_rate * 100).toFixed(0)}%</div>
+      <div><span>Avg return</span><br><b class="${cls(s.avg_ret)}">${pct(s.avg_ret)}</b></div>
+      <div><span>Total P&amp;L</span><br><b class="${cls(s.pnl_sol)}">${s.pnl_sol >= 0 ? "+" : ""}${s.pnl_sol.toFixed(3)} SOL</b></div>
+      ${best ? `<div style="grid-column:1/-1"><span>Best minute to sell</span><br>minute ${best.minute}: ${pct(best.avg_ret)} avg, ${(best.win_rate * 100).toFixed(0)}% win (n=${best.n})</div>` : ""}
+    </div>
+    ${minuteChart(s.hold, best && best.minute)}
+    ${s.trades < 50 ? `<div style="font-size:12px;color:var(--warn);margin-top:6px">Only ${s.trades} trades. Wait for 50–100 before trusting this.</div>` : ""}`
+    : `<div class="empty" style="padding:8px">No finished paper trades yet. Each one is followed for 60 minutes.</div>`;
+  $("paper").innerHTML += `<div class="trades">${p.open.length ? `<div><b>Open (${p.open.length})</b></div>` + p.open.map(row).join("") : ""}
+    ${p.recent.length ? `<div><b>Recent</b></div>` + p.recent.map(row).join("") : ""}</div>`;
+}
+
 function connect() {
   const es = new EventSource("/api/stream");
   es.onmessage = (e) => {
     const m = JSON.parse(e.data);
-    if (m.type === "snapshot") { state.tokens = m.tokens; state.stats = m.stats; renderStats(); renderRows(); }
+    if (m.type === "snapshot") { state.tokens = m.tokens; state.stats = m.stats; renderStats(); renderRows(); renderPaper(m.paper); }
     else if (m.type === "alert") addAlerts([m.alert], true);
     else if (m.type === "alerts") { $("alerts").innerHTML = ""; addAlerts(m.alerts, false); }
   };
   es.onerror = () => { state.stats.feed = "disconnected"; renderStats(); };
 }
 connect();
+fetch("/api/paper").then((r) => r.ok ? r.json() : null).then(renderPaper).catch(() => {});
 </script>
 </body>
 </html>

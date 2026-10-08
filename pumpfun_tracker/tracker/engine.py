@@ -28,13 +28,16 @@ def _num(msg: dict, key: str, optional: bool = False) -> Optional[float]:
 
 def _numbers(msg: dict) -> dict:
     """Parse every numeric field up front so a bad message can't half-apply."""
-    return {
+    out = {
         "sol": _num(msg, "solAmount"),
         "tokens": _num(msg, "tokenAmount", True) or _num(msg, "initialBuy"),
         "v_tokens": _num(msg, "vTokensInBondingCurve", True),
         "v_sol": _num(msg, "vSolInBondingCurve", True),
         "mcap": _num(msg, "marketCapSol", True),
     }
+    if out["mcap"] == 0:
+        raise ValueError("marketCapSol is zero")
+    return out
 
 
 def _text(v, limit: int) -> str:
@@ -56,6 +59,7 @@ class Engine:
         self.created_total = 0
         self.sol_usd: Optional[float] = None
         self.feed_status = "starting"
+        self.pinned: set[str] = set()  # mints that must not be pruned (e.g. open paper positions)
 
     # ---- ingestion -----------------------------------------------------
 
@@ -180,11 +184,11 @@ class Engine:
         cfg = self.config
         dead = [
             m for m, t in self.tokens.items()
-            if now - max(t.last_trade_at, t.created_at) > cfg.idle_prune_s
+            if m not in self.pinned and now - max(t.last_trade_at, t.created_at) > cfg.idle_prune_s
         ]
         overflow = len(self.tokens) - len(dead) - cfg.max_tokens
         if overflow > 0:
-            dead_set = set(dead)
+            dead_set = set(dead) | self.pinned
             alive = sorted(
                 (t for m, t in self.tokens.items() if m not in dead_set),
                 key=lambda t: (t.score, t.last_trade_at),

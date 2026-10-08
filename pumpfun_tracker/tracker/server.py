@@ -13,7 +13,8 @@ log = logging.getLogger(__name__)
 STATIC = Path(__file__).resolve().parent.parent / "static"
 
 
-def create_app(engine: Engine, feed, alerts: AlertDispatcher, fetch_sol_price: bool = True) -> web.Application:
+def create_app(engine: Engine, feed, alerts: AlertDispatcher, fetch_sol_price: bool = True,
+               paper=None) -> web.Application:
     app = web.Application()
     clients: set[asyncio.Queue] = set()
 
@@ -33,12 +34,17 @@ def create_app(engine: Engine, feed, alerts: AlertDispatcher, fetch_sol_price: b
                 if pruned:
                     await feed.unsubscribe(pruned)
                 for a in new_alerts:
+                    if paper:
+                        paper.on_alert(a)
                     broadcast({"type": "alert", "alert": a})
                     task = asyncio.create_task(alerts.send(a))
                     sending.add(task)
                     task.add_done_callback(sending.discard)
+                if paper:
+                    paper.tick(engine.clock())
                 if clients:
-                    broadcast({"type": "snapshot", "stats": engine.stats(), "tokens": engine.ranked(100)})
+                    broadcast({"type": "snapshot", "stats": engine.stats(), "tokens": engine.ranked(100),
+                               "paper": paper.view(engine.clock()) if paper else None})
             except asyncio.CancelledError:
                 raise
             except Exception:
@@ -112,6 +118,11 @@ def create_app(engine: Engine, feed, alerts: AlertDispatcher, fetch_sol_price: b
             clients.discard(q)
         return resp
 
+    async def paper_view(_):
+        if not paper:
+            raise web.HTTPNotFound(text="paper trading is disabled")
+        return web.json_response(paper.view(engine.clock()))
+
     async def health(_):
         return web.json_response({"ok": True, **engine.stats()})
 
@@ -120,6 +131,7 @@ def create_app(engine: Engine, feed, alerts: AlertDispatcher, fetch_sol_price: b
     app.router.add_get("/api/tokens/{mint}", token_detail)
     app.router.add_get("/api/alerts", alert_list)
     app.router.add_get("/api/stream", stream)
+    app.router.add_get("/api/paper", paper_view)
     app.router.add_get("/api/health", health)
     app.on_startup.append(on_startup)
     app.on_cleanup.append(on_cleanup)
