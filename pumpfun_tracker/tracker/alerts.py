@@ -1,0 +1,41 @@
+"""Where "skyrocketing" alerts go: the console, plus optional Discord / Telegram."""
+import logging
+
+import aiohttp
+
+log = logging.getLogger(__name__)
+
+
+def format_alert(a: dict) -> str:
+    flags = f" [{', '.join(a['flags'])}]" if a["flags"] else ""
+    return (f"🚀 ${a['symbol']} ({a['name']}) score {a['score']:.0f} | "
+            f"mcap {a['mcap_sol']:.1f} SOL | +{a['change_5m'] * 100:.0f}% 5m | "
+            f"{a['buyers_5m']} buyers{flags}\nhttps://pump.fun/coin/{a['mint']}")
+
+
+class AlertDispatcher:
+    def __init__(self, discord_webhook: str = None, telegram_token: str = None, telegram_chat: str = None):
+        self.discord_webhook = discord_webhook
+        self.telegram = (telegram_token, telegram_chat) if telegram_token and telegram_chat else None
+        self.session = None
+
+    async def send(self, alert: dict) -> None:
+        text = format_alert(alert)
+        log.info(text.replace("\n", " "))
+        if not (self.discord_webhook or self.telegram):
+            return
+        if self.session is None:
+            self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10))
+        try:
+            if self.discord_webhook:
+                await self.session.post(self.discord_webhook, json={"content": text})
+            if self.telegram:
+                token, chat = self.telegram
+                await self.session.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                                        json={"chat_id": chat, "text": text, "disable_web_page_preview": True})
+        except Exception as e:
+            log.warning("alert delivery failed: %s", e)
+
+    async def close(self) -> None:
+        if self.session:
+            await self.session.close()
