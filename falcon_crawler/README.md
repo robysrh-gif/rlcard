@@ -76,3 +76,36 @@ We can have upto 10 celery workers at a time. This feature allows us to crawl ar
 
 
 
+
+
+## Seed-site crawling (horse racing)
+Besides keyword search, FALCON can crawl a fixed list of seed sites directly. The seeds are in
+`utils/racing_sites.py` and currently cover:
+
+| Seed name | Start URLs |
+|---|---|
+| `equibase` | equibase.com (home, entries index, chart summaries, news) |
+| `offtrackbetting` | offtrackbetting.com |
+| `horseracingnation_entries` | entries.horseracingnation.com |
+| `horseracingnation` | horseracingnation.com (home, news) |
+| `drf` | drf.com (home, news, results) |
+| `attheraces` | attheraces.com (home, racecards, results, news) |
+
+The crawler (`utils/site_crawler.py`) walks each site breadth first, stays on the site's own domains,
+obeys robots.txt (including `Crawl-delay`) and waits between requests. Each page is classified from its URL
+into `racing_entries`, `racing_results`, `racing_odds`, `racing_news` or `racing_general`, and stored as a
+`Link` under the keyword named after the site, with the title, meta tags, headline, a text snippet and any
+HTML tables (race cards, result charts, odds boards) as JSON in `scrape_data`.
+
+```
+python manage.py crawl_seeds --list                      # show seed sites
+python manage.py crawl_seeds --dry-run --site equibase   # crawl and report, save nothing
+python manage.py crawl_seeds --user <username>           # crawl all seeds, show links on that user's dashboard
+python manage.py crawl_seeds --site drf --max-pages 100 --max-depth 3 --delay 5
+```
+
+The same crawl can run on a Celery worker: `crawler.tasks.crawl_seed_sites_task.delay(["drf"], "<username>")`.
+
+Notes: pages that build their content with JavaScript (live odds boards in particular) only yield what is in the
+initial HTML; some sites block automated clients or limit reuse of their data in their terms of use, so check
+those before crawling at volume. Add another site by appending an entry to `SEED_SITES`.

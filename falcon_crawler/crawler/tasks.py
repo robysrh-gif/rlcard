@@ -40,3 +40,13 @@ def scrape_social(keyword):
         social.save()
 
 
+
+
+@shared_task
+def crawl_seed_sites_task(site_names=None, username=None, max_pages=50, max_depth=2, delay=2.0, reschedule=1):
+    """Celery entry point for the seed-site crawler (see crawler/seed_crawl.py)."""
+    from crawler.seed_crawl import crawl_seed_sites
+    summaries = crawl_seed_sites(site_names=site_names, username=username, reschedule=reschedule,
+                                 max_pages=max_pages, max_depth=max_depth, delay=delay)
+    # errors hold tuples; return plain data so any result backend can store it
+    return [{**s, "errors": [list(e) for e in s["errors"]]} for s in summaries]
